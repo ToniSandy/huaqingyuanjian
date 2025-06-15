@@ -1,0 +1,107 @@
+Patch Embedding
+python
+Rearrange('b c (n p) -> b n (p c)', p=patch_size)
+Design Ideas:
+
+Split the 1D sequence into fixed-length patches
+
+Example: 256 length sequence 16 patch size → 16 patches
+
+Technical details:
+
+Efficient dimensional reorganization using EINOPS
+
+This is followed by LayerNorm stable training
+
+2. Positional coding can be learned
+python
+self.pos_embedding = nn. Parameter(torch.randn(1, num_patches   1, dim))
+Differences from traditional ViT:
+
+1D Position Encoding (2D for Native ViT)
+
+Contains CLS token location ( 1)
+
+3. CLS Token processing
+python
+cls_tokens = repeat(self.cls_token, 'd -> b d', b=b)
+x, ps = pack([cls_tokens, x], 'b * d')
+Innovations:
+
+Use pack/unpack instead of regular concat
+
+More flexibility to handle variable-length inputs
+
+Function:
+
+Represented as a global sequence
+
+Ultimately used for classification tasks
+
+4. Transformer encoder
+python
+for attn, ff in self.layers:
+x = attn(x) x # residual connection
+x = ff(x)   x
+Key Designs:
+
+Pre-LN structure (LayerNorm before attention/feedforward)
+
+Residual connections prevent gradient vanishing
+
+Hyperparameter Selection:
+
+Typical configuration: depth=6, heads=8, dim_head=64
+
+5. Classification head design
+python
+nn. Sequential(
+nn. LayerNorm(dim),
+nn. Linear(dim, num_classes)
+)
+Design Considerations:
+
+Only the CLS token feature is used
+
+Eventually, LayerNorm improves stability
+
+Dimension Validation:
+
+Add a shape check after each reflow operation
+
+python
+assert x.shape == (b, n, dim), f"Expected shape {(b, n, dim)}, got {x.shape}"
+Initialization Policy:
+
+python
+nn.init.normal_(self.cls_token, std=0.02) # is consistent with the original ViT paper
+Gradient checks:
+
+python
+print(f"Grad norm: {torch.norm(torch.cat([p.grad.flatten() for p in model.parameters()]))}")
+5. Expansibility design
+Multimodal support:
+
+Images/videos can be supported by modifying the patch embedding layer
+
+python
+# Image examples
+Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=16, p2=16)
+Regression Task Adaptation:
+
+python
+self.mlp_head = nn. Sequential(
+nn. LayerNorm(dim),
+nn. Linear(dim, 1) # Modify the output dimension
+6. Performance considerations
+Computational complexity:
+
+Attention layer: O(n²d) (n is the sequence length, d is the dimension)
+
+Memory Optimization: Using Gradient Checkpointing
+
+Real-world deployment recommendations:
+
+Consider linear attention variants for long sequences
+
+Use TensorRT for inference optimization
